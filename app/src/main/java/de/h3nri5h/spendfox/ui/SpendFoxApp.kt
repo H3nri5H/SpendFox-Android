@@ -3,6 +3,7 @@ package de.h3nri5h.spendfox.ui
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -325,7 +326,7 @@ private fun RecordCard(title: String, value: String, subtitle: String, onDelete:
             }
             if (onDelete != null) {
                 Spacer(Modifier.height(8.dp))
-                TextButton(onClick = onDelete) { Text("Löschen") }
+                TextButton(onClick = { onDelete() }) { Text("Löschen") }
             }
         }
     }
@@ -423,7 +424,7 @@ private fun AddVehicleDialog(onDismiss: () -> Unit, onSave: (String, String, Str
 }
 
 @Composable
-private fun DialogForm(hasError: Boolean, content: @Composable Column.() -> Unit) {
+private fun DialogForm(hasError: Boolean, content: @Composable ColumnScope.() -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         if (hasError) {
             Text("Bitte Pflichtfelder und Betrag prüfen.", color = MaterialTheme.colorScheme.error)
