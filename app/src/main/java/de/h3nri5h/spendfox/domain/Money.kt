@@ -13,13 +13,7 @@ object Money {
     private val dateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.GERMANY)
 
     fun centsFrom(input: String): Long? {
-        val normalized = input
-            .trim()
-            .replace("€", "")
-            .replace(" ", "")
-            .replace(".", "")
-            .replace(',', '.')
-
+        val normalized = normalizeAmount(input)
         if (normalized.isBlank()) return null
 
         return runCatching {
@@ -39,5 +33,28 @@ object Money {
             .atZone(ZoneId.systemDefault())
             .toLocalDate()
         return dateFormatter.format(localDate)
+    }
+
+    private fun normalizeAmount(input: String): String {
+        val cleaned = input
+            .trim()
+            .replace("€", "")
+            .replace(" ", "")
+
+        if (cleaned.contains(',')) {
+            return cleaned.replace(".", "").replace(',', '.')
+        }
+
+        val dotCount = cleaned.count { it == '.' }
+        if (dotCount == 0) return cleaned
+
+        val lastDotIndex = cleaned.lastIndexOf('.')
+        val fraction = cleaned.substring(lastDotIndex + 1)
+
+        return if (fraction.length in 1..2) {
+            cleaned.substring(0, lastDotIndex).replace(".", "") + "." + fraction
+        } else {
+            cleaned.replace(".", "")
+        }
     }
 }
