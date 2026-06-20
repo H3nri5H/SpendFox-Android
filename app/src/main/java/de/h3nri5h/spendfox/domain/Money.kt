@@ -11,14 +11,19 @@ import java.util.Locale
 object Money {
     private val currencyFormatter = NumberFormat.getCurrencyInstance(Locale.GERMANY)
     private val dateFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.GERMANY)
+    private val amountPattern = Regex("""\d+(\.\d{1,2})?""")
 
     fun centsFrom(input: String): Long? {
         val normalized = normalizeAmount(input)
         if (normalized.isBlank()) return null
+        if (!amountPattern.matches(normalized)) return null
 
         return runCatching {
-            BigDecimal(normalized)
-                .setScale(2, RoundingMode.HALF_UP)
+            val amount = BigDecimal(normalized)
+            if (amount.signum() <= 0 || amount.scale() > 2) return null
+
+            amount
+                .setScale(2, RoundingMode.UNNECESSARY)
                 .movePointRight(2)
                 .longValueExact()
         }.getOrNull()
@@ -40,6 +45,7 @@ object Money {
             .trim()
             .replace("€", "")
             .replace(" ", "")
+            .replace("\u00A0", "")
 
         if (cleaned.contains(',')) {
             return cleaned.replace(".", "").replace(',', '.')
