@@ -1,29 +1,30 @@
-# SpendFox Android
+# Nutzblick Android
 
-SpendFox Android is a native Android prototype for personal expense tracking, products and vehicles.
+Nutzblick Android is a native Android app for personal expense tracking, products, vehicles and contract context. Finn Fuchs remains the in-app contact character and guide.
 
-## Prototype scope
+## Test publish scope
 
-The first version is intentionally small and local-first:
+The current version is scoped for a Supabase-backed test publish:
 
 - Kotlin
 - Jetpack Compose UI
 - Material 3 components
-- local Room persistence with Supabase-ready sync metadata
+- local Room cache fed from Supabase after authentication
 - main tabs: overview, contracts, analytics and settings
 - feature menu areas: expenses, products and vehicles
 - add, search and delete flows
 - device unlock through Android credential/biometric prompt after login
-- Supabase Auth and PostgREST sync path when configured
+- Supabase Auth and PostgREST as the required account data path
 
 ## Design direction
 
-SpendFox should stay a native Android app while taking cues from Apple's Human Interface Guidelines:
+Nutzblick should stay a native Android app while taking cues from Apple's Human Interface Guidelines:
 
 - content stays clear, readable and direct
 - navigation and primary actions may use a light Liquid Glass-inspired treatment
 - glass surfaces should not stack on top of other glass surfaces
 - controls should feel calm, rounded and easy to tap
+- green and petrol tones carry the product surface, while fox orange is reserved as an accent
 - future personal features should appear as new areas instead of forcing every workflow into expense tracking
 - accessibility and contrast take priority over decorative transparency
 
@@ -36,9 +37,9 @@ SpendFox should stay a native Android app while taking cues from Apple's Human I
 
 Open the repository in Android Studio and run the **app** configuration on an emulator or Android phone.
 
-## Local configuration
+## Supabase configuration
 
-SpendFox can run in local-only prototype mode. To enable the prepared Supabase path, add these keys to `local.properties`:
+Nutzblick requires Supabase before users can register or sign in. Add these keys to `local.properties`:
 
 ```properties
 supabase.url=https://your-project.supabase.co
@@ -51,14 +52,20 @@ Legacy projects can still use:
 supabase.anonKey=your-public-anon-key
 ```
 
-Do not commit Supabase secrets. Use only the publishable/anon client key in the app, never a secret or service-role key. Run `supabase/spendfox_schema.sql` in the Supabase SQL editor before using real sync; it creates the app tables and Row Level Security policies.
+Do not commit Supabase secrets. Use only the publishable/anon client key in the app, never a secret or service-role key. Run `supabase/nutzblick_schema.sql` in the Supabase SQL editor before using real data; it creates the app tables and Row Level Security policies.
+
+## Google Play readiness
+
+Play Console declarations are tracked in `docs/play/google-play-declarations.md`. The data-safety draft is in `docs/play/data-safety.md`, the privacy policy draft is in `docs/play/privacy-policy.md`, and the release checklist is in `docs/play/release-readiness.md`.
+
+The Play App Signing terms and the US export declaration must still be accepted by the Play Console account owner in Google Play Console. The project is prepared for those declarations, but they cannot be completed from source code alone.
 
 ### Supabase email verification
 
-SpendFox expects signup verification through the 6-digit Supabase email OTP, not through a confirmation link. In Supabase, keep email confirmations enabled and update the **Confirm signup** email template so the user can see the token, for example:
+Nutzblick expects signup verification through the 6-digit Supabase email OTP, not through a confirmation link. In Supabase, keep email confirmations enabled and update the **Confirm signup** email template so the user can see the token, for example:
 
 ```text
-Dein SpendFox Code: {{ .Token }}
+Dein Nutzblick Code: {{ .Token }}
 ```
 
 The app verifies this code with Supabase Auth after registration. The confirmation link can stay in the template as a fallback, but it is no longer required for the in-app registration flow.
@@ -73,13 +80,13 @@ app/src/main/java/de/h3nri5h/spendfox/
 └── MainActivity.kt
 ```
 
-The prototype stores all data locally in `spendfox.db` through Room. Account-owned rows include sync metadata (`userId`, timestamps, deleted marker and sync state) and are pushed to Supabase via PostgREST when a Supabase session is available.
+The app uses `nutzblick_cache.db` as a local cache only. After login, account rows are pulled from Supabase and replace the local cache for that user. Writes and soft-deletes are sent to Supabase through PostgREST with the authenticated user token.
 
-Vehicles now use a tank journal for odometer, fuel amount, fuel cost, consumption and maintenance context. The import/export format is a SpendFox CSV shaped after the existing Excel workbook, but owned by the app so it can evolve cleanly.
+Vehicles use a tank journal for odometer, fuel amount, fuel cost, consumption and maintenance context. The import/export format is a Nutzblick CSV shaped after the existing Excel workbook, but owned by the app so it can evolve cleanly.
 
 ## Next milestones
 
-1. Pull remote Supabase rows back into Room with last-write-wins reconciliation.
+1. Add refresh-token rotation and expired-session recovery.
 2. Add a polished XLSX vehicle export beside CSV.
 3. Expand contracts into a full recurring-cost area.
 4. Add notification permission flow for maintenance reminders.

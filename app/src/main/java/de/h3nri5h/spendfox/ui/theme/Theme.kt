@@ -17,33 +17,33 @@ enum class SpendFoxThemeMode(val label: String) {
 }
 
 private val LightColors = lightColorScheme(
-    primary = Color(0xFFF2762E),
-    onPrimary = Color(0xFF241B17),
-    secondary = Color(0xFF6F5E55),
-    tertiary = Color(0xFF356B9B),
-    background = Color(0xFFFFF8F2),
-    onBackground = Color(0xFF241B17),
+    primary = Color(0xFF2F6F63),
+    onPrimary = Color(0xFFFFFFFF),
+    secondary = Color(0xFF7A5A42),
+    tertiary = Color(0xFFE47737),
+    background = Color(0xFFF4F7F2),
+    onBackground = Color(0xFF17211D),
     surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF241B17),
-    surfaceVariant = Color(0xFFF7ECE4),
-    onSurfaceVariant = Color(0xFF6F5E55),
-    outlineVariant = Color(0xFFE7D6CB),
-    error = Color(0xFFB94242)
+    onSurface = Color(0xFF17211D),
+    surfaceVariant = Color(0xFFE7EFE8),
+    onSurfaceVariant = Color(0xFF53605A),
+    outlineVariant = Color(0xFFD2DDD4),
+    error = Color(0xFFB2443D)
 )
 
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFFFF8A3D),
-    onPrimary = Color(0xFF151210),
-    secondary = Color(0xFFC9B7AC),
-    tertiary = Color(0xFF7EAFE3),
-    background = Color(0xFF000000),
-    onBackground = Color(0xFFFFF4EB),
-    surface = Color(0xFF111111),
-    onSurface = Color(0xFFFFF4EB),
-    surfaceVariant = Color(0xFF1B1714),
-    onSurfaceVariant = Color(0xFFC9B7AC),
-    outlineVariant = Color(0xFF493A33),
-    error = Color(0xFFFF7A74)
+    primary = Color(0xFF8BC7B8),
+    onPrimary = Color(0xFF0B1F1A),
+    secondary = Color(0xFFD1B79F),
+    tertiary = Color(0xFFFFA56B),
+    background = Color(0xFF09110F),
+    onBackground = Color(0xFFEAF1EC),
+    surface = Color(0xFF101916),
+    onSurface = Color(0xFFEAF1EC),
+    surfaceVariant = Color(0xFF1C2A25),
+    onSurfaceVariant = Color(0xFFC5D1CB),
+    outlineVariant = Color(0xFF34463F),
+    error = Color(0xFFFF8C82)
 )
 
 private val SpendFoxShapes = Shapes(

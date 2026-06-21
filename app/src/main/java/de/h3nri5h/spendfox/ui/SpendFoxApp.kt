@@ -212,7 +212,7 @@ fun SpendFoxApp(viewModel: SpendFoxViewModel = viewModel(factory = SpendFoxViewM
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(spendFoxBackdrop())
+            .background(nutzblickBackdrop())
     ) {
         when (state.mode) {
             AppMode.LoggedOut -> AuthScreen(state, viewModel)
@@ -312,11 +312,11 @@ private fun AuthWelcomeScreen(onStart: () -> Unit, onLogin: () -> Unit) {
             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
             contentColor = MaterialTheme.colorScheme.primary
         ) {
-            Text("SF", modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text("NB", modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         }
         Text("Hallo, ich bin Finn Fuchs.", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
         Text(
-            "Ich helfe dir dabei, deine Ausgaben, Produkte, Fahrzeuge und Verträge auf einen Blick zu behalten.",
+            "Ich bin dein Ansprechpartner in Nutzblick und halte Ausgaben, Produkte, Fahrzeuge und Verträge übersichtlich zusammen.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -353,7 +353,7 @@ private fun AuthUnlockChoiceScreen(
         }
         Spacer(Modifier.weight(0.6f))
         Text(
-            "Wie soll SpendFox entsperrt werden?",
+            "Wie soll Nutzblick entsperrt werden?",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold
         )
@@ -411,7 +411,7 @@ private fun AuthCredentialsScreen(
             textAlign = TextAlign.Center
         )
         Text(
-            text = if (isRegistering) "Gib deine E-Mail-Adresse ein." else "Melde dich mit deinem SpendFox-Konto an.",
+            text = if (isRegistering) "Gib deine E-Mail-Adresse ein." else "Melde dich mit deinem Nutzblick-Konto an.",
             modifier = Modifier.fillMaxWidth(),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -456,7 +456,7 @@ private fun AuthCredentialsScreen(
         ProviderButton("Weiter mit Google", "G") { onProvider("Google") }
         if (!state.authStatus.isSupabaseConfigured) {
             Text(
-                text = "Supabase ist noch nicht konfiguriert. Login läuft lokal im vorbereiteten Konto-Modus.",
+                text = "Supabase ist noch nicht konfiguriert. Nutzblick benötigt vor dem Test-Publish eine Supabase URL und einen Publishable Key.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -576,10 +576,10 @@ private fun DeviceUnlockScreen(state: SpendFoxUiState, viewModel: SpendFoxViewMo
     }
     CenterScreen {
         GlassCard {
-            Text("SpendFox entsperren", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text("Nutzblick entsperren", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Text(state.authStatus.session?.email.orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
-                "SpendFox nutzt deine ausgewählte Geräteentsperrung: ${state.unlockMethod.label}.",
+                "Nutzblick nutzt deine ausgewählte Geräteentsperrung: ${state.unlockMethod.label}.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             FeedbackButton(
@@ -623,7 +623,7 @@ private fun showDeviceUnlock(activity: FragmentActivity, viewModel: SpendFoxView
         UnlockMethod.DeviceCredential -> DEVICE_CREDENTIAL
     }
     val promptInfo = BiometricPrompt.PromptInfo.Builder()
-        .setTitle("SpendFox entsperren")
+        .setTitle("Nutzblick entsperren")
         .setSubtitle(unlockMethod.label)
         .setAllowedAuthenticators(allowedAuthenticators)
         .build()
@@ -978,7 +978,7 @@ private fun CompoundInterestScreen(padding: PaddingValues) {
             }
         }
         if (result == null) {
-            item { EmptyState("Bitte vollständige Werte eintragen, damit SpendFox rechnen kann.") }
+            item { EmptyState("Bitte vollständige Werte eintragen, damit Nutzblick rechnen kann.") }
         } else {
             item {
                 SummaryCard(result.title, result.valueLabel, result.caption)
@@ -1439,7 +1439,7 @@ private fun ExpenseDetailScreen(
 
 @Composable
 private fun MerchantLogo(merchant: String) {
-    val label = merchant.trim().take(4).uppercase(Locale.GERMANY).ifBlank { "SF" }
+    val label = merchant.trim().take(4).uppercase(Locale.GERMANY).ifBlank { "NB" }
     Surface(
         modifier = Modifier.size(96.dp),
         shape = RoundedCornerShape(18.dp),
@@ -1718,7 +1718,7 @@ private fun merchantLogoColor(merchant: String): Color {
         merchant.contains("rewe", ignoreCase = true) -> Color(0xFFE4232E)
         merchant.contains("netto", ignoreCase = true) -> Color(0xFFE6A300)
         merchant.contains("scalable", ignoreCase = true) -> Color(0xFF16B6B1)
-        else -> Color(0xFFF2762E)
+        else -> Color(0xFFE47737)
     }
 }
 
@@ -1757,14 +1757,14 @@ private fun ExpensesScreen(
                 OutlinedButton(
                     onClick = {
                         exportFormat = ExpenseExportFormat.Csv
-                        exportLauncher.launch("spendfox-ausgaben.csv")
+                        exportLauncher.launch("nutzblick-ausgaben.csv")
                     },
                     modifier = Modifier.weight(1f)
                 ) { Text("CSV Export") }
                 OutlinedButton(
                     onClick = {
                         exportFormat = ExpenseExportFormat.Xlsx
-                        exportLauncher.launch("spendfox-ausgaben.xlsx")
+                        exportLauncher.launch("nutzblick-ausgaben.xlsx")
                     },
                     modifier = Modifier.weight(1f)
                 ) { Text("Excel") }
@@ -2042,7 +2042,7 @@ private fun SettingsScreen(state: SpendFoxUiState, padding: PaddingValues, viewM
                 SettingsDetail.Appearance -> item {
                     GlassCard {
                         Text("Design", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Text("Legt fest, ob SpendFox hell, dunkel oder nach Systemeinstellung dargestellt wird.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Legt fest, ob Nutzblick hell, dunkel oder nach Systemeinstellung dargestellt wird.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         CategoryChips(SpendFoxThemeMode.entries, state.themeMode, viewModel::setThemeMode) { it.label }
                     }
                 }
@@ -2050,7 +2050,7 @@ private fun SettingsScreen(state: SpendFoxUiState, padding: PaddingValues, viewM
                     item {
                         GlassCard {
                             Text("Entsperrung", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                            Text("SpendFox sperrt sich, sobald die App in den Hintergrund gelegt wird.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Nutzblick sperrt sich, sobald die App in den Hintergrund gelegt wird.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             UnlockMethod.entries.forEach { method ->
                                 SelectableOptionCard(
                                     title = method.label,
@@ -2112,7 +2112,7 @@ private fun PersonalProfileSettingsScreen(
         AlertDialog(
             onDismissRequest = { showDeleteConfirmation = false },
             title = { Text("Benutzerkonto löschen?") },
-            text = { Text("Das endgültige Löschen muss später serverseitig über Supabase bestätigt werden. SpendFox merkt diese Aktion deshalb nur vor.") },
+            text = { Text("Das endgültige Löschen muss später serverseitig über Supabase bestätigt werden. Nutzblick merkt diese Aktion deshalb nur vor.") },
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteConfirmation = false
@@ -2220,7 +2220,7 @@ private fun PersonalProfileSettingsScreen(
         item {
             DangerSettingsCard(
                 title = "Benutzerkonto löschen",
-                body = "Alle deine Daten werden unwiderruflich gelöscht und du musst dich erneut registrieren, um SpendFox nutzen zu können.",
+                body = "Alle deine Daten werden unwiderruflich gelöscht und du musst dich erneut registrieren, um Nutzblick nutzen zu können.",
                 buttonLabel = "Benutzerkonto löschen",
                 onClick = { showDeleteConfirmation = true }
             )
@@ -3160,14 +3160,14 @@ private fun Double.formatOneDecimal(): String = "%.1f".format(Locale.GERMANY, th
 private fun isDarkThemeActive(): Boolean = MaterialTheme.colorScheme.background == Color.Black
 
 @Composable
-private fun spendFoxBackdrop(): Brush {
+private fun nutzblickBackdrop(): Brush {
     return if (isDarkThemeActive()) {
         Brush.verticalGradient(
             colors = listOf(Color.Black, Color.Black)
         )
     } else {
         Brush.verticalGradient(
-            colors = listOf(Color(0xFFFFF8F2), Color(0xFFF7ECE4), Color(0xFFFFE1CC))
+            colors = listOf(Color(0xFFF4F7F2), Color(0xFFE7EFE8), Color(0xFFFFE4D3))
         )
     }
 }

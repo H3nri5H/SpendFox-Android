@@ -25,7 +25,7 @@ abstract class SpendFoxDatabase : RoomDatabase() {
     abstract fun dao(): SpendFoxDao
 
     companion object {
-        const val DATABASE_NAME = "spendfox.db"
+        const val DATABASE_NAME = "nutzblick_cache.db"
 
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {

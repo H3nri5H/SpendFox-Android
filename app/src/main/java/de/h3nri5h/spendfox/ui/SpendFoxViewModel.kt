@@ -13,7 +13,6 @@ import de.h3nri5h.spendfox.data.Expense
 import de.h3nri5h.spendfox.data.ExpenseCategory
 import de.h3nri5h.spendfox.data.FuelEntry
 import de.h3nri5h.spendfox.data.FuelType
-import de.h3nri5h.spendfox.data.LOCAL_USER_ID
 import de.h3nri5h.spendfox.data.MaintenanceItem
 import de.h3nri5h.spendfox.data.Product
 import de.h3nri5h.spendfox.data.ProductCategory
@@ -24,6 +23,7 @@ import de.h3nri5h.spendfox.data.Trip
 import de.h3nri5h.spendfox.data.UserCategory
 import de.h3nri5h.spendfox.data.Vehicle
 import de.h3nri5h.spendfox.data.auth.AuthRepository
+import de.h3nri5h.spendfox.data.auth.AuthSession
 import de.h3nri5h.spendfox.data.auth.AuthStatus
 import de.h3nri5h.spendfox.data.auth.RegistrationResult
 import de.h3nri5h.spendfox.data.exporting.ExpenseExportFormat
@@ -73,7 +73,7 @@ private object SpendFoxPreferenceKeys {
 }
 
 class SpendFoxViewModel(application: Application) : AndroidViewModel(application) {
-    private val preferences = application.getSharedPreferences("spendfox_settings", Context.MODE_PRIVATE)
+    private val preferences = application.getSharedPreferences("nutzblick_settings", Context.MODE_PRIVATE)
     private val authRepository = AuthRepository(application.applicationContext)
     private val syncRepository = SyncRepository(
         supabaseUrl = BuildConfig.SUPABASE_URL,
@@ -95,6 +95,8 @@ class SpendFoxViewModel(application: Application) : AndroidViewModel(application
     )
     val state: StateFlow<SpendFoxUiState> = _state.asStateFlow()
     private var snapshotJob: Job? = null
+    private var remoteRefreshJob: Job? = null
+    private var remoteLoadedUserId: String? = null
 
     init {
         viewModelScope.launch {
@@ -102,22 +104,29 @@ class SpendFoxViewModel(application: Application) : AndroidViewModel(application
                 auth to sync
             }.collectLatest { (auth, sync) ->
                 val session = auth.session
-                val userId = session?.userId ?: LOCAL_USER_ID
+                val userId = session?.userId.orEmpty()
                 val mode = when {
                     session == null -> AppMode.LoggedOut
                     !_state.value.isUnlocked -> AppMode.Locked
                     else -> AppMode.Unlocked
+                }
+                if (session == null) {
+                    snapshotJob?.cancel()
+                    snapshotJob = null
+                    remoteRefreshJob?.cancel()
+                    remoteLoadedUserId = null
                 }
                 _state.value = _state.value.copy(
                     authStatus = auth,
                     syncMessage = sync.message,
                     activeUserId = userId,
                     mode = mode,
+                    snapshot = if (session == null) SpendFoxSnapshot() else _state.value.snapshot,
                     appVersion = BuildConfig.VERSION_NAME
                 )
-                observeSnapshot(userId)
-                withContext(Dispatchers.IO) {
-                    repository.seedIfEmpty(userId)
+                if (session != null) {
+                    observeSnapshot(userId)
+                    refreshRemoteCache(session, ensureProfile = false)
                 }
             }
         }
@@ -243,12 +252,12 @@ class SpendFoxViewModel(application: Application) : AndroidViewModel(application
 
     fun logout() {
         val userId = _state.value.authStatus.session?.userId
-        if (userId != null) {
-            viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (userId != null) {
                 repository.clearAccountData(userId)
             }
+            authRepository.logout()
         }
-        authRepository.logout()
         _state.value = SpendFoxUiState(themeMode = readThemeMode(), unlockMethod = readUnlockMethod(), personalProfile = readPersonalProfile())
     }
 
@@ -543,17 +552,7 @@ class SpendFoxViewModel(application: Application) : AndroidViewModel(application
 
     private fun handleAuthResult(result: Result<de.h3nri5h.spendfox.data.auth.AuthSession>) {
         result.onSuccess { session ->
-            viewModelScope.launch(Dispatchers.IO) {
-                repository.attachLocalDataToUser(session.userId)
-                repository.upsertProfile(
-                    de.h3nri5h.spendfox.data.UserProfile(
-                        id = session.userId,
-                        userId = session.userId,
-                        email = session.email,
-                        displayName = session.email.substringBefore("@")
-                    )
-                )
-            }
+            refreshRemoteCache(session, ensureProfile = true, force = true)
             _state.value = _state.value.copy(
                 activeUserId = session.userId,
                 isUnlocked = false,
@@ -563,6 +562,32 @@ class SpendFoxViewModel(application: Application) : AndroidViewModel(application
             )
         }.onFailure {
             _state.value = _state.value.copy(message = it.message.orEmpty())
+        }
+    }
+
+    private fun refreshRemoteCache(session: AuthSession, ensureProfile: Boolean, force: Boolean = false) {
+        if (!force && remoteLoadedUserId == session.userId) return
+        if (!force && remoteRefreshJob?.isActive == true) return
+        if (force) remoteRefreshJob?.cancel()
+        remoteRefreshJob = viewModelScope.launch(Dispatchers.IO) {
+            val refreshed = repository.refreshFromRemote(session.userId)
+            refreshed.onFailure { error ->
+                repository.clearAccountData(session.userId)
+                remoteLoadedUserId = null
+                _state.value = _state.value.copy(message = error.message.orEmpty())
+            }
+            if (refreshed.isFailure) return@launch
+            remoteLoadedUserId = session.userId
+            if (ensureProfile) {
+                repository.upsertProfile(
+                    de.h3nri5h.spendfox.data.UserProfile(
+                        id = session.userId,
+                        userId = session.userId,
+                        email = session.email,
+                        displayName = session.email.substringBefore("@")
+                    )
+                )
+            }
         }
     }
 
@@ -592,7 +617,9 @@ class SpendFoxViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    private fun activeUserId(): String = _state.value.authStatus.session?.userId ?: LOCAL_USER_ID
+    private fun activeUserId(): String = checkNotNull(_state.value.authStatus.session?.userId) {
+        "Keine aktive Supabase-Session."
+    }
 
     private fun readThemeMode(): SpendFoxThemeMode {
         val saved = preferences.getString(SpendFoxPreferenceKeys.THEME_MODE, SpendFoxThemeMode.System.name)
@@ -637,7 +664,7 @@ data class SpendFoxUiState(
     val authStatus: AuthStatus = AuthStatus(),
     val mode: AppMode = AppMode.LoggedOut,
     val isUnlocked: Boolean = false,
-    val activeUserId: String = LOCAL_USER_ID,
+    val activeUserId: String = "",
     val syncMessage: String = "",
     val message: String = "",
     val isBusy: Boolean = false,

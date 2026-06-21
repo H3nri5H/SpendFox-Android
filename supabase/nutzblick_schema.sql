@@ -54,6 +54,23 @@ create table if not exists public.vehicles (
   sync_state text not null default 'PendingUpsert'
 );
 
+create table if not exists public.trips (
+  id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  vehicle_id uuid not null,
+  date_at bigint not null,
+  start_odometer_km bigint not null,
+  end_odometer_km bigint not null,
+  purpose text not null,
+  start_location text not null default '',
+  end_location text not null default '',
+  note text not null default '',
+  created_at bigint not null,
+  updated_at bigint not null,
+  deleted_at bigint,
+  sync_state text not null default 'PendingUpsert'
+);
+
 create table if not exists public.fuel_entries (
   id uuid primary key,
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -119,14 +136,25 @@ create table if not exists public.user_profiles (
 alter table public.expenses enable row level security;
 alter table public.products enable row level security;
 alter table public.vehicles enable row level security;
+alter table public.trips enable row level security;
 alter table public.fuel_entries enable row level security;
 alter table public.maintenance_items enable row level security;
 alter table public.categories enable row level security;
 alter table public.user_profiles enable row level security;
 
+alter table public.expenses force row level security;
+alter table public.products force row level security;
+alter table public.vehicles force row level security;
+alter table public.trips force row level security;
+alter table public.fuel_entries force row level security;
+alter table public.maintenance_items force row level security;
+alter table public.categories force row level security;
+alter table public.user_profiles force row level security;
+
 drop policy if exists "expenses own rows" on public.expenses;
 drop policy if exists "products own rows" on public.products;
 drop policy if exists "vehicles own rows" on public.vehicles;
+drop policy if exists "trips own rows" on public.trips;
 drop policy if exists "fuel entries own rows" on public.fuel_entries;
 drop policy if exists "maintenance own rows" on public.maintenance_items;
 drop policy if exists "categories own rows" on public.categories;
@@ -135,14 +163,25 @@ drop policy if exists "profiles own rows" on public.user_profiles;
 create policy "expenses own rows" on public.expenses for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 create policy "products own rows" on public.products for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 create policy "vehicles own rows" on public.vehicles for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+create policy "trips own rows" on public.trips for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 create policy "fuel entries own rows" on public.fuel_entries for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 create policy "maintenance own rows" on public.maintenance_items for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 create policy "categories own rows" on public.categories for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 create policy "profiles own rows" on public.user_profiles for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 
+revoke all on public.expenses from anon;
+revoke all on public.products from anon;
+revoke all on public.vehicles from anon;
+revoke all on public.trips from anon;
+revoke all on public.fuel_entries from anon;
+revoke all on public.maintenance_items from anon;
+revoke all on public.categories from anon;
+revoke all on public.user_profiles from anon;
+
 grant select, insert, update, delete on public.expenses to authenticated;
 grant select, insert, update, delete on public.products to authenticated;
 grant select, insert, update, delete on public.vehicles to authenticated;
+grant select, insert, update, delete on public.trips to authenticated;
 grant select, insert, update, delete on public.fuel_entries to authenticated;
 grant select, insert, update, delete on public.maintenance_items to authenticated;
 grant select, insert, update, delete on public.categories to authenticated;

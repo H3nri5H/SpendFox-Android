@@ -30,7 +30,7 @@ class FuelLogCsv {
     fun export(vehicle: Vehicle, entries: List<FuelEntry>): ByteArray {
         val sorted = entries.sortedBy { it.dateEpochMillis }
         val rows = buildList {
-            add(listOf("SpendFox Tankjournal", vehicle.displayName, "", "", "", "", "", "", ""))
+            add(listOf("Nutzblick Tankjournal", vehicle.displayName, "", "", "", "", "", "", ""))
             add(listOf("Datum", "Kilometerstand", "Gefahrene km", "Getankt/L", "Betrag", "L/100 km", "€/Liter", "Tankstelle", "Notiz"))
             sorted.forEach { entry ->
                 add(
@@ -108,7 +108,7 @@ class FuelLogCsv {
                 amountCents = amountCents,
                 fuelStation = station,
                 note = note,
-                sourceType = "spendfox-fuel-csv",
+                sourceType = "nutzblick-fuel-csv",
                 sourceHash = hash,
                 userId = userId,
                 syncState = SyncState.PendingUpsert

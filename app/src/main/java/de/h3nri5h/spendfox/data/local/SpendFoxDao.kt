@@ -86,27 +86,6 @@ interface SpendFoxDao {
     @Query("SELECT source_hash FROM expenses WHERE user_id = :userId AND source_hash != ''")
     suspend fun expenseSourceHashes(userId: String): List<String>
 
-    @Query("UPDATE expenses SET user_id = :userId, updated_at = :now, sync_state = :syncState WHERE user_id = 'local'")
-    suspend fun attachLocalExpenses(userId: String, now: Long, syncState: String)
-
-    @Query("UPDATE products SET user_id = :userId, updated_at = :now, sync_state = :syncState WHERE user_id = 'local'")
-    suspend fun attachLocalProducts(userId: String, now: Long, syncState: String)
-
-    @Query("UPDATE vehicles SET user_id = :userId, updated_at = :now, sync_state = :syncState WHERE user_id = 'local'")
-    suspend fun attachLocalVehicles(userId: String, now: Long, syncState: String)
-
-    @Query("UPDATE fuel_entries SET user_id = :userId, updated_at = :now, sync_state = :syncState WHERE user_id = 'local'")
-    suspend fun attachLocalFuelEntries(userId: String, now: Long, syncState: String)
-
-    @Query("UPDATE trips SET user_id = :userId, updated_at = :now, sync_state = :syncState WHERE user_id = 'local'")
-    suspend fun attachLocalTrips(userId: String, now: Long, syncState: String)
-
-    @Query("UPDATE maintenance_items SET user_id = :userId, updated_at = :now, sync_state = :syncState WHERE user_id = 'local'")
-    suspend fun attachLocalMaintenanceItems(userId: String, now: Long, syncState: String)
-
-    @Query("UPDATE categories SET user_id = :userId, updated_at = :now, sync_state = :syncState WHERE user_id = 'local'")
-    suspend fun attachLocalCategories(userId: String, now: Long, syncState: String)
-
     @Query("DELETE FROM expenses WHERE user_id = :userId")
     suspend fun hardDeleteExpensesForUser(userId: String)
 
@@ -131,6 +110,15 @@ interface SpendFoxDao {
     @Query("DELETE FROM user_profiles WHERE user_id = :userId")
     suspend fun hardDeleteProfileForUser(userId: String)
 
-    @Query("SELECT COUNT(*) FROM expenses")
-    suspend fun expenseCount(): Int
+    @Query("SELECT * FROM expenses WHERE id = :id LIMIT 1")
+    suspend fun expenseById(id: String): ExpenseEntity?
+
+    @Query("SELECT * FROM products WHERE id = :id LIMIT 1")
+    suspend fun productById(id: String): ProductEntity?
+
+    @Query("SELECT * FROM vehicles WHERE id = :id LIMIT 1")
+    suspend fun vehicleById(id: String): VehicleEntity?
+
+    @Query("SELECT * FROM fuel_entries WHERE id = :id LIMIT 1")
+    suspend fun fuelEntryById(id: String): FuelEntryEntity?
 }

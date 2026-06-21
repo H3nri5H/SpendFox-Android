@@ -43,99 +43,65 @@ class SpendFoxRepository(
         }
     }
 
-    suspend fun seedIfEmpty(userId: String) {
-        if (dao.expenseCount() > 0) return
-        val now = System.currentTimeMillis()
-        upsertExpense(
-            Expense(
-                amountCents = 6420,
-                merchant = "Wocheneinkauf",
-                category = ExpenseCategory.Groceries,
-                occurredAtEpochMillis = now - ONE_DAY,
-                userId = userId,
-                syncState = SyncState.Synced
-            )
-        )
-        upsertExpense(
-            Expense(
-                amountCents = 4900,
-                merchant = "Monatsticket",
-                category = ExpenseCategory.Mobility,
-                occurredAtEpochMillis = now - 3 * ONE_DAY,
-                userId = userId,
-                syncState = SyncState.Synced
-            )
-        )
-        upsertProduct(
-            Product(
-                name = "Notebook",
-                manufacturer = "Beispiel",
-                purchasePriceCents = 129900,
-                purchasedAtEpochMillis = now - 180 * ONE_DAY,
-                category = ProductCategory.Technology,
-                usageDurationMonths = 48,
-                userId = userId,
-                syncState = SyncState.Synced
-            )
-        )
-        upsertVehicle(
-            Vehicle(
-                displayName = "Alltagsauto",
-                manufacturer = "Beispiel",
-                modelName = "Kompakt",
-                licensePlate = "XX SF 2026",
-                fuelType = FuelType.Petrol,
-                userId = userId,
-                syncState = SyncState.Synced
-            )
-        )
-    }
-
-    suspend fun attachLocalDataToUser(userId: String) {
-        val now = System.currentTimeMillis()
-        val state = SyncState.PendingUpsert.name
-        dao.attachLocalExpenses(userId, now, state)
-        dao.attachLocalProducts(userId, now, state)
-        dao.attachLocalVehicles(userId, now, state)
-        dao.attachLocalFuelEntries(userId, now, state)
-        dao.attachLocalTrips(userId, now, state)
-        dao.attachLocalMaintenanceItems(userId, now, state)
-        dao.attachLocalCategories(userId, now, state)
+    suspend fun refreshFromRemote(userId: String): Result<Unit> {
+        return syncRepository.fetchSnapshot(userId).mapCatching { snapshot ->
+            clearAccountData(userId)
+            dao.upsertExpenses(snapshot.expenses.map { it.toEntity() })
+            snapshot.products.forEach { dao.upsertProduct(it.toEntity()) }
+            snapshot.vehicles.forEach { dao.upsertVehicle(it.toEntity()) }
+            snapshot.trips.forEach { dao.upsertTrip(it.toEntity()) }
+            dao.upsertFuelEntries(snapshot.fuelEntries.map { it.toEntity() })
+            snapshot.maintenanceItems.forEach { dao.upsertMaintenanceItem(it.toEntity()) }
+            snapshot.categories.forEach { dao.upsertCategory(it.toEntity()) }
+            snapshot.profile?.let { dao.upsertProfile(it.toEntity()) }
+        }
     }
 
     suspend fun upsertExpense(expense: Expense) {
         require(expense.amountCents > 0)
         require(expense.merchant.isNotBlank())
-        val pending = expense.copy(syncState = syncRepository.pendingState())
-        dao.upsertExpense(pending.toEntity())
-        syncRepository.upsert("expenses", pending.toRemotePayload())
+        val synced = expense.copy(syncState = SyncState.Synced)
+        if (syncRepository.upsert("expenses", synced.toRemotePayload())) {
+            dao.upsertExpense(synced.toEntity())
+        }
     }
 
     suspend fun upsertExpenses(expenses: List<Expense>) {
-        val pending = expenses.map { it.copy(syncState = syncRepository.pendingState()) }
-        dao.upsertExpenses(pending.map { it.toEntity() })
-        pending.forEach { syncRepository.upsert("expenses", it.toRemotePayload()) }
+        val stored = mutableListOf<Expense>()
+        expenses.map { it.copy(syncState = SyncState.Synced) }.forEach { expense ->
+            if (syncRepository.upsert("expenses", expense.toRemotePayload())) {
+                stored += expense
+            }
+        }
+        if (stored.isNotEmpty()) {
+            dao.upsertExpenses(stored.map { it.toEntity() })
+        }
     }
 
     suspend fun upsertProduct(product: Product) {
         require(product.name.isNotBlank())
         require(product.purchasePriceCents > 0)
-        val pending = product.copy(syncState = syncRepository.pendingState())
-        dao.upsertProduct(pending.toEntity())
-        syncRepository.upsert("products", pending.toRemotePayload())
+        val synced = product.copy(syncState = SyncState.Synced)
+        if (syncRepository.upsert("products", synced.toRemotePayload())) {
+            dao.upsertProduct(synced.toEntity())
+        }
     }
 
     suspend fun upsertVehicle(vehicle: Vehicle) {
         require(vehicle.displayName.isNotBlank())
-        val pending = vehicle.copy(syncState = syncRepository.pendingState())
-        dao.upsertVehicle(pending.toEntity())
-        syncRepository.upsert("vehicles", pending.toRemotePayload())
+        val synced = vehicle.copy(syncState = SyncState.Synced)
+        if (syncRepository.upsert("vehicles", synced.toRemotePayload())) {
+            dao.upsertVehicle(synced.toEntity())
+        }
     }
 
     suspend fun upsertTrip(trip: Trip) {
         require(trip.vehicleId.isNotBlank())
         require(trip.endOdometerKm >= trip.startOdometerKm)
-        dao.upsertTrip(trip.copy(syncState = syncRepository.pendingState()).toEntity())
+        val synced = trip.copy(syncState = SyncState.Synced)
+        if (syncRepository.upsert("trips", synced.toRemotePayload())) {
+            dao.upsertTrip(synced.toEntity())
+        }
     }
 
     suspend fun upsertFuelEntry(entry: FuelEntry) {
@@ -143,52 +109,94 @@ class SpendFoxRepository(
         require(entry.odometerKm >= 0)
         require(entry.liters > 0.0)
         require(entry.amountCents >= 0)
-        val pending = entry.copy(syncState = syncRepository.pendingState())
-        dao.upsertFuelEntry(pending.toEntity())
-        syncRepository.upsert("fuel_entries", pending.toRemotePayload())
+        val synced = entry.copy(syncState = SyncState.Synced)
+        if (syncRepository.upsert("fuel_entries", synced.toRemotePayload())) {
+            dao.upsertFuelEntry(synced.toEntity())
+        }
     }
 
     suspend fun upsertFuelEntries(entries: List<FuelEntry>) {
-        val pending = entries.map { it.copy(syncState = syncRepository.pendingState()) }
-        dao.upsertFuelEntries(pending.map { it.toEntity() })
-        pending.forEach { syncRepository.upsert("fuel_entries", it.toRemotePayload()) }
+        val stored = mutableListOf<FuelEntry>()
+        entries.map { it.copy(syncState = SyncState.Synced) }.forEach { entry ->
+            if (syncRepository.upsert("fuel_entries", entry.toRemotePayload())) {
+                stored += entry
+            }
+        }
+        if (stored.isNotEmpty()) {
+            dao.upsertFuelEntries(stored.map { it.toEntity() })
+        }
     }
 
     suspend fun upsertMaintenanceItem(item: MaintenanceItem) {
         require(item.vehicleId.isNotBlank())
         require(item.name.isNotBlank())
-        val pending = item.copy(syncState = syncRepository.pendingState())
-        dao.upsertMaintenanceItem(pending.toEntity())
-        syncRepository.upsert("maintenance_items", pending.toRemotePayload())
+        val synced = item.copy(syncState = SyncState.Synced)
+        if (syncRepository.upsert("maintenance_items", synced.toRemotePayload())) {
+            dao.upsertMaintenanceItem(synced.toEntity())
+        }
     }
 
     suspend fun upsertCategory(category: UserCategory) {
         require(category.label.isNotBlank())
-        val pending = category.copy(syncState = syncRepository.pendingState())
-        dao.upsertCategory(pending.toEntity())
-        syncRepository.upsert("categories", pending.toRemotePayload())
+        val synced = category.copy(syncState = SyncState.Synced)
+        if (syncRepository.upsert("categories", synced.toRemotePayload())) {
+            dao.upsertCategory(synced.toEntity())
+        }
     }
 
     suspend fun upsertProfile(profile: UserProfile) {
-        val pending = profile.copy(syncState = syncRepository.pendingState())
-        dao.upsertProfile(pending.toEntity())
-        syncRepository.upsert("user_profiles", pending.toRemotePayload())
+        val synced = profile.copy(syncState = SyncState.Synced)
+        if (syncRepository.upsert("user_profiles", synced.toRemotePayload())) {
+            dao.upsertProfile(synced.toEntity())
+        }
     }
 
     suspend fun deleteExpense(id: String) = id.takeIf(String::isNotBlank)?.let {
-        dao.softDeleteExpense(it, System.currentTimeMillis(), SyncState.PendingDelete.name)
+        val now = System.currentTimeMillis()
+        val deleted = dao.expenseById(it)?.toModel()?.copy(
+            deletedAtEpochMillis = now,
+            updatedAtEpochMillis = now,
+            syncState = SyncState.Synced
+        ) ?: return@let
+        if (syncRepository.upsert("expenses", deleted.toRemotePayload())) {
+            dao.upsertExpense(deleted.toEntity(now))
+        }
     }
 
     suspend fun deleteProduct(id: String) = id.takeIf(String::isNotBlank)?.let {
-        dao.softDeleteProduct(it, System.currentTimeMillis(), SyncState.PendingDelete.name)
+        val now = System.currentTimeMillis()
+        val deleted = dao.productById(it)?.toModel()?.copy(
+            deletedAtEpochMillis = now,
+            updatedAtEpochMillis = now,
+            syncState = SyncState.Synced
+        ) ?: return@let
+        if (syncRepository.upsert("products", deleted.toRemotePayload())) {
+            dao.upsertProduct(deleted.toEntity(now))
+        }
     }
 
     suspend fun deleteVehicle(id: String) = id.takeIf(String::isNotBlank)?.let {
-        dao.softDeleteVehicle(it, System.currentTimeMillis(), SyncState.PendingDelete.name)
+        val now = System.currentTimeMillis()
+        val deleted = dao.vehicleById(it)?.toModel()?.copy(
+            deletedAtEpochMillis = now,
+            updatedAtEpochMillis = now,
+            syncState = SyncState.Synced
+        ) ?: return@let
+        if (syncRepository.upsert("vehicles", deleted.toRemotePayload())) {
+            dao.upsertVehicle(deleted.toEntity(now))
+        }
     }
 
     suspend fun deleteFuelEntry(id: String) = id.takeIf(String::isNotBlank)?.let {
-        dao.softDeleteFuelEntry(it, System.currentTimeMillis(), SyncState.PendingDelete.name)
+        val now = System.currentTimeMillis()
+        val deleted = dao.fuelEntryById(it)?.toModel()?.copy(
+            deletedAtEpochMillis = now,
+            updatedAtEpochMillis = now,
+            syncState = SyncState.Synced
+        ) ?: return@let
+        if (syncRepository.upsert("fuel_entries", deleted.toRemotePayload())) {
+            dao.upsertFuelEntry(deleted.toEntity(now))
+        }
     }
 
     suspend fun clearAccountData(userId: String) {
@@ -200,9 +208,5 @@ class SpendFoxRepository(
         dao.hardDeleteMaintenanceItemsForUser(userId)
         dao.hardDeleteCategoriesForUser(userId)
         dao.hardDeleteProfileForUser(userId)
-    }
-
-    private companion object {
-        const val ONE_DAY = 24L * 60L * 60L * 1000L
     }
 }

@@ -1,9 +1,12 @@
 package de.h3nri5h.spendfox.data.auth
 
 import android.content.Context
+import android.content.SharedPreferences
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import de.h3nri5h.spendfox.BuildConfig
 import de.h3nri5h.spendfox.data.supabase.SupabaseRestClient
-import java.security.MessageDigest
+import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,7 +32,7 @@ sealed class RegistrationResult {
 }
 
 class AuthRepository(context: Context) {
-    private val prefs = context.getSharedPreferences("spendfox_auth", Context.MODE_PRIVATE)
+    private val prefs = createSecurePreferences(context)
     private val supabase = SupabaseRestClient(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_KEY)
     private val _status = MutableStateFlow(readStatus())
     val status: StateFlow<AuthStatus> = _status.asStateFlow()
@@ -38,16 +41,11 @@ class AuthRepository(context: Context) {
         val validation = validateCredentials(email, password)
         validation.exceptionOrNull()?.let { return@withContext Result.failure(it) }
         val normalizedEmail = requireNotNull(validation.getOrNull())
+        requireSupabaseConfigured().exceptionOrNull()?.let { return@withContext Result.failure(it) }
 
-        if (supabase.isConfigured) {
-            runCatching<RegistrationResult> {
-                supabase.signUp(normalizedEmail, password)
-                RegistrationResult.PendingVerification(normalizedEmail)
-            }
-        } else {
-            val session = createLocalSession(normalizedEmail)
-            _status.value = readStatus()
-            Result.success<RegistrationResult>(RegistrationResult.SignedIn(session))
+        runCatching<RegistrationResult> {
+            supabase.signUp(normalizedEmail, password)
+            RegistrationResult.PendingVerification(normalizedEmail)
         }
     }
 
@@ -64,11 +62,7 @@ class AuthRepository(context: Context) {
         if (token.length != 6) {
             return@withContext Result.failure(IllegalArgumentException("Bitte den 6-stelligen Code aus der E-Mail eingeben."))
         }
-        if (!supabase.isConfigured) {
-            val session = createLocalSession(normalizedEmail)
-            _status.value = readStatus()
-            return@withContext Result.success(session)
-        }
+        requireSupabaseConfigured().exceptionOrNull()?.let { return@withContext Result.failure(it) }
         val result = runCatching {
             saveSession(supabase.verifySignupOtp(normalizedEmail, token))
         }
@@ -81,11 +75,8 @@ class AuthRepository(context: Context) {
         if (!normalizedEmail.contains("@")) {
             return@withContext Result.failure(IllegalArgumentException("Bitte eine gültige E-Mail-Adresse eingeben."))
         }
-        if (supabase.isConfigured) {
-            runCatching { supabase.resendSignupOtp(normalizedEmail) }
-        } else {
-            Result.success(Unit)
-        }
+        requireSupabaseConfigured().exceptionOrNull()?.let { return@withContext Result.failure(it) }
+        runCatching { supabase.resendSignupOtp(normalizedEmail) }
     }
 
     suspend fun forgotPassword(email: String): Result<Unit> = withContext(Dispatchers.IO) {
@@ -93,31 +84,29 @@ class AuthRepository(context: Context) {
         if (!normalizedEmail.contains("@")) {
             return@withContext Result.failure(IllegalArgumentException("Bitte eine gültige E-Mail-Adresse eingeben."))
         }
-        if (supabase.isConfigured) {
-            runCatching { supabase.recoverPassword(normalizedEmail) }
-        } else {
-            Result.success(Unit)
-        }
+        requireSupabaseConfigured().exceptionOrNull()?.let { return@withContext Result.failure(it) }
+        runCatching { supabase.recoverPassword(normalizedEmail) }
     }
 
-    fun logout() {
-        prefs.edit().clear().apply()
+    suspend fun logout() = withContext(Dispatchers.IO) {
+        val token = currentAccessToken()
+        if (supabase.isConfigured && !token.isNullOrBlank()) {
+            supabase.signOut(token)
+        }
+        prefs?.edit()?.clear()?.apply()
         _status.value = readStatus()
     }
 
-    fun currentAccessToken(): String? = prefs.getString(KEY_ACCESS_TOKEN, null)
+    fun currentAccessToken(): String? = prefs?.getString(KEY_ACCESS_TOKEN, null)
 
     private suspend fun authenticate(email: String, password: String): Result<AuthSession> = withContext(Dispatchers.IO) {
         val validation = validateCredentials(email, password)
         validation.exceptionOrNull()?.let { return@withContext Result.failure(it) }
         val normalizedEmail = requireNotNull(validation.getOrNull())
+        requireSupabaseConfigured().exceptionOrNull()?.let { return@withContext Result.failure(it) }
 
-        val result = if (supabase.isConfigured) {
-            runCatching {
-                saveSession(supabase.signIn(normalizedEmail, password))
-            }
-        } else {
-            Result.success(createLocalSession(normalizedEmail))
+        val result = runCatching {
+            saveSession(supabase.signIn(normalizedEmail, password))
         }
 
         _status.value = readStatus()
@@ -136,7 +125,8 @@ class AuthRepository(context: Context) {
     }
 
     private fun saveSession(response: de.h3nri5h.spendfox.data.supabase.SupabaseAuthResponse): AuthSession {
-        prefs.edit()
+        val securePrefs = prefs ?: throw IOException("Sicherer Sitzungsspeicher ist nicht verfügbar.")
+        securePrefs.edit()
             .putString(KEY_USER_ID, response.userId)
             .putString(KEY_EMAIL, response.email)
             .putString(KEY_ACCESS_TOKEN, response.accessToken)
@@ -145,31 +135,42 @@ class AuthRepository(context: Context) {
         return AuthSession(userId = response.userId, email = response.email)
     }
 
-    private fun createLocalSession(normalizedEmail: String): AuthSession {
-        val session = AuthSession(
-            userId = stableUserId(normalizedEmail),
-            email = normalizedEmail
-        )
-        prefs.edit()
-            .putString(KEY_USER_ID, session.userId)
-            .putString(KEY_EMAIL, session.email)
-            .apply()
-        return session
-    }
-
     private fun readStatus(): AuthStatus {
-        val userId = prefs.getString(KEY_USER_ID, null)
-        val email = prefs.getString(KEY_EMAIL, null)
-        val session = if (!userId.isNullOrBlank() && !email.isNullOrBlank()) AuthSession(userId, email) else null
+        val securePrefs = prefs
+        if (!supabase.isConfigured || securePrefs == null) {
+            return AuthStatus(session = null, isSupabaseConfigured = supabase.isConfigured)
+        }
+        val userId = securePrefs.getString(KEY_USER_ID, null)
+        val email = securePrefs.getString(KEY_EMAIL, null)
+        val accessToken = securePrefs.getString(KEY_ACCESS_TOKEN, null)
+        val session = if (!userId.isNullOrBlank() && !email.isNullOrBlank() && !accessToken.isNullOrBlank()) AuthSession(userId, email) else null
         return AuthStatus(
             session = session,
             isSupabaseConfigured = supabase.isConfigured
         )
     }
 
-    private fun stableUserId(email: String): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest(email.toByteArray())
-        return digest.joinToString("") { "%02x".format(it) }.take(32)
+    private fun requireSupabaseConfigured(): Result<Unit> {
+        return if (supabase.isConfigured) {
+            Result.success(Unit)
+        } else {
+            Result.failure(IllegalStateException("Supabase ist nicht konfiguriert. Nutzblick erlaubt keinen lokalen Konto-Modus mehr."))
+        }
+    }
+
+    private fun createSecurePreferences(context: Context): SharedPreferences? {
+        return runCatching {
+            val masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            EncryptedSharedPreferences.create(
+                context,
+                "nutzblick_auth",
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        }.getOrNull()
     }
 
     private companion object {

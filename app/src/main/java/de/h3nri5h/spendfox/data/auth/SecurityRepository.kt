@@ -8,19 +8,17 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 
 class SecurityRepository(context: Context) {
-    private val prefs: SharedPreferences = runCatching {
+    private val prefs: SharedPreferences = run {
         val masterKey = MasterKey.Builder(context)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()
         EncryptedSharedPreferences.create(
             context,
-            "spendfox_secure",
+            "nutzblick_secure",
             masterKey,
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
-    }.getOrElse {
-        context.getSharedPreferences("spendfox_secure_fallback", Context.MODE_PRIVATE)
     }
 
     fun hasPin(userId: String): Boolean = prefs.contains(hashKey(userId))

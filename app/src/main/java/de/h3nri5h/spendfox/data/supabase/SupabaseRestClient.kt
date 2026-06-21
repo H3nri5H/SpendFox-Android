@@ -1,8 +1,11 @@
 package de.h3nri5h.spendfox.data.supabase
 
+import de.h3nri5h.spendfox.data.SpendFoxSnapshot
 import java.io.IOException
 import java.net.HttpURLConnection
+import java.net.URLEncoder
 import java.net.URL
+import org.json.JSONArray
 import org.json.JSONObject
 
 data class SupabaseAuthResponse(
@@ -86,6 +89,24 @@ class SupabaseRestClient(
         )
     }
 
+    fun fetchSnapshot(userId: String, accessToken: String?): SpendFoxSnapshot {
+        if (!isConfigured) throw IOException("Supabase ist noch nicht konfiguriert.")
+        if (accessToken.isNullOrBlank()) throw IOException("Keine aktive Supabase-Session.")
+        if (userId.isBlank()) throw IOException("Keine Nutzerkennung für Supabase-Abfrage.")
+        return SpendFoxSnapshot(
+            expenses = fetchRows("expenses", userId, accessToken).map { it.toExpenseModel() },
+            products = fetchRows("products", userId, accessToken).map { it.toProductModel() },
+            vehicles = fetchRows("vehicles", userId, accessToken).map { it.toVehicleModel() },
+            trips = fetchRows("trips", userId, accessToken).map { it.toTripModel() },
+            fuelEntries = fetchRows("fuel_entries", userId, accessToken).map { it.toFuelEntryModel() },
+            maintenanceItems = fetchRows("maintenance_items", userId, accessToken).map { it.toMaintenanceItemModel() },
+            categories = fetchRows("categories", userId, accessToken).map { it.toUserCategoryModel() },
+            profile = fetchRows("user_profiles", userId, accessToken, includeDeletedFilter = false)
+                .firstOrNull()
+                ?.toUserProfileModel()
+        )
+    }
+
     private fun authRequest(path: String, body: JSONObject): SupabaseAuthResponse {
         val json = JSONObject(request(method = "POST", path = path, body = body.toString(), accessToken = null))
         val user = json.optJSONObject("user")
@@ -102,6 +123,23 @@ class SupabaseRestClient(
             accessToken = accessToken,
             refreshToken = refreshToken
         )
+    }
+
+    private fun fetchRows(
+        table: String,
+        userId: String,
+        accessToken: String,
+        includeDeletedFilter: Boolean = true
+    ): List<JSONObject> {
+        val deletedFilter = if (includeDeletedFilter) "&deleted_at=is.null" else ""
+        val response = request(
+            method = "GET",
+            path = "/rest/v1/$table?select=*&user_id=eq.${urlEncode(userId)}$deletedFilter&order=updated_at.desc",
+            body = "",
+            accessToken = accessToken
+        )
+        val rows = JSONArray(response)
+        return (0 until rows.length()).map { index -> rows.getJSONObject(index) }
     }
 
     private fun request(
@@ -139,5 +177,9 @@ class SupabaseRestClient(
             throw IOException(message.ifBlank { "Supabase Anfrage fehlgeschlagen ($status)." })
         }
         return response
+    }
+
+    private fun urlEncode(value: String): String {
+        return URLEncoder.encode(value, Charsets.UTF_8.name())
     }
 }

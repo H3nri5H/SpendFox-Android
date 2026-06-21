@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "SpendFoxAndroid"
+rootProject.name = "NutzblickAndroid"
 include(":app")
